@@ -1,0 +1,17 @@
+import src.midi_utils as midi_utils
+import src.markov as markov
+
+# Load a MIDI file
+midi_file = midi_utils.load_midi("midi_files/BennyCarter_JustFriends_FINAL.mid")
+# Parse the data into notes with start and end times
+parsed_data = midi_utils.parse_midi(midi_file)
+# Convert the parsed data into a list of states (in this case just the notes)
+states = midi_utils.create_states(parsed_data)
+
+# Create and train a markov chain with the states that have been generated.
+markov_chain = markov.MarkovChain()
+markov_chain.create_state_dictionary(states)
+markov_chain.create_transition_matrix(states)
+# Generate a sequence of states.
+generated_sequence = markov_chain.generate_sequence(50)
+print(generated_sequence)
