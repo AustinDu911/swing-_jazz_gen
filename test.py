@@ -56,7 +56,7 @@ try:
             first_note = parsed_notes[0]
             print(f"First note: {first_note}")
             if isinstance(first_note, dict) and \
-               'note' in first_note and (isinstance(first_note['note'], int) or first_note['note'] == midi_utils.REST_SYMBOL) and \
+               'note' in first_note and (isinstance(first_note['note'], int) and first_note['note'] == midi_utils.REST_SYMBOL) and \
                'start_time' in first_note and isinstance(first_note['start_time'], (float, int)) and \
                'end_time' in first_note and isinstance(first_note['end_time'], (float, int)) and \
                'duration' in first_note and isinstance(first_note['duration'], (float, int)):

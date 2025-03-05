@@ -60,10 +60,7 @@ def parse_midi(midi_file, quantization='16th_triplet'):
     for track in midi_file.tracks: #Iterate through tracks in the midi file.
         for message in track: #iterate through messages in the track
             current_time += message.time * time_scale #increment current time to the message time
-            if message.type == SET_TEMPO: #Override default tempo if the file contains the value
-                tempo = mido.tempo2bpm(message.tempo)
-                time_scale = 60 / (tempo * midi_file.ticks_per_beat) #recalculate time_scale
-            elif message.type == NOTE_ON: #if a note has started
+            if message.type == 'note_on': #if a note has started
                 
                 #Before processing the note on, check if there is a rest.
                 rest_duration = current_time - last_note_off_time
@@ -123,7 +120,7 @@ def parse_midi(midi_file, quantization='16th_triplet'):
                             'duration': quantized_duration #store the calculated quantized duration
                         })
                         del note_on_messages[message.note] #remove the note from note_on_messages dictionary
-            elif message.type == NOTE_OFF: #if a note is ending
+            elif message.type == 'note_off': #if a note is ending
                 if message.note in note_on_messages: #if note is in dictionary then we can create a note
                     start_time = note_on_messages[message.note] #get the start time from note_on_messages
                     end_time = current_time #set the end time to current_time
@@ -199,8 +196,8 @@ def create_midi_file(notes, filename="output.mid", tempo=120):
     ticks_per_beat = midi_file.ticks_per_beat
 
     for note in notes:
-        midi_note = note[0]
-        duration = note[1]
+        midi_note = note['note']
+        duration = note['duration']
 
         if midi_note == REST_SYMBOL: #it is a rest, so continue
             continue
