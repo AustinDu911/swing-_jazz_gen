@@ -1,214 +1,176 @@
-# midi_utils.py
-import mido
+import src.midi_utils as midi_utils
+import mido  # We are importing mido just to check the type.
 import os
 
-# Constants (for readability and maintainability)
-NOTE_ON = 'note_on'
-NOTE_OFF = 'note_off'
-SET_TEMPO = 'set_tempo'
-REST_SYMBOL = -1 #define rest as negative 1
+import src.markov as markov
+import numpy as np
 
-def load_midi(file_path):
-    """Loads a MIDI file using mido.
+print(f"Current working directory: {os.getcwd()}")
+print(f"Files in midi_files directory: {os.listdir('midi_files')}")
 
-    Args:
-        file_path (str): The path to the MIDI file.
+# Define a dictionary to map key names to their note numbers
+NOTE_TO_NUMBER = {'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7,
+                  'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11}
 
-    Returns:
-        mido.MidiFile: A mido MIDI file object.
+# Test load_midi function with a valid file path
+valid_file_path = "midi_files/BennyCarter_JustFriends_FINAL_C.mid"  # Replace with your MIDI file
 
-    Raises:
-        FileNotFoundError: If the MIDI file is not found.
-        Exception: If the file cannot be opened or read.
-    """
-    try:
-        midi_file = mido.MidiFile(file_path)
-        return midi_file
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Error: MIDI file not found at {file_path}")
-    except Exception as e:
-        raise Exception(f"Error opening or reading MIDI file: {e}")
+try:
+    midi_file = midi_utils.load_midi(valid_file_path)
+    if isinstance(midi_file, mido.MidiFile):
+        print(f"load_midi test passed for {valid_file_path}: File loaded successfully!")
 
-def parse_midi(midi_file, quantization='16th_triplet'):
-    """Parses a mido MIDI file object to extract note information and quantize durations.
+        # Get tempo from midi file, the mido way
+        for track in midi_file.tracks:
+            for message in track:
+                if message.type == 'set_tempo':
+                    tempo = mido.tempo2bpm(message.tempo)
+                    break
 
-    Args:
-        midi_file (mido.MidiFile): The MIDI file object.
-        quantization (str): The quantization level ('16th_triplet' or other).
-
-    Returns:
-        list: A list of dictionaries, where each dictionary represents a note
-              and contains 'note', 'start_time', 'end_time', and 'duration' (quantized).
-    """
-    notes = []
-    tempo = 120  # Default tempo (BPM). Can be overridden by MIDI file messages.
-    time_scale = 60 / (tempo * midi_file.ticks_per_beat) #Scale midi ticks to seconds
-    current_time = 0  # Current time in seconds
-    note_on_messages = {} # Dictionary to store note on times for each note value.
-    last_note_off_time = 0 #keep track of the last note off time
-    
-    # Get tempo from midi file, the mido way
-    for track in midi_file.tracks:
-        for message in track:
-            if message.type == 'set_tempo':
-                tempo = mido.tempo2bpm(message.tempo)
-                break
-    
-    time_scale = 60 / (tempo * midi_file.ticks_per_beat) #recalculate time_scale
+        print(f"  - BPM Tempo: {tempo}")  # Print tempo
+        print(f"  - Ticks per beat: {midi_file.ticks_per_beat}")  # Print ticks per beat
 
 
-    for track in midi_file.tracks: #Iterate through tracks in the midi file.
-        for message in track: #iterate through messages in the track
-            current_time += message.time * time_scale #increment current time to the message time
-            if message.type == 'note_on': #if a note has started
-                
-                #Before processing the note on, check if there is a rest.
-                rest_duration = current_time - last_note_off_time
-                if rest_duration > (60 / tempo / 4):  # Threshold: 16th note, to define a rest
-                    # Quantize the rest duration
-                    beat_length = 60 / tempo  # Length of one beat in seconds
-                    duration_beats = rest_duration / beat_length  # Duration in beats
+    else:
+        print(f"load_midi test failed for {valid_file_path}: Incorrect return type.")
+except FileNotFoundError as e:
+    print(f"load_midi test failed for {valid_file_path}: {e}")
+except Exception as e:
+    print(f"load_midi test failed for {valid_file_path}: An unexpected error occurred: {e}")
 
-                    # Quantize to 16th notes and 16th note triplets
-                    sixteenth_notes = duration_beats * 4
-                    sixteenth_triplets = duration_beats * 6
+# Test load_midi function with an invalid file path
+invalid_file_path = "midi_files/nonexistent.mid"
 
-                    # Calculate the distance to the nearest 16th note and 16th note triplet
-                    sixteenth_note_distance = abs(round(sixteenth_notes) - sixteenth_notes)
-                    sixteenth_triplet_distance = abs(round(sixteenth_triplets) - sixteenth_triplets)
+try:
+    midi_utils.load_midi(invalid_file_path)
+    print("load_midi test failed for invalid path: No error raised!")  # Should not reach this point
+except FileNotFoundError:
+    print("load_midi test passed for invalid path: FileNotFoundError raised correctly!")
+except Exception as e:
+    print(f"load_midi test failed for {invalid_file_path}: An unexpected error occurred: {e}")
 
-                    if sixteenth_note_distance < sixteenth_triplet_distance:
-                        quantized_duration = round(sixteenth_notes) / 4  # Convert back to beats
-                    else:
-                        quantized_duration = round(sixteenth_triplets) / 6 # Convert back to beats
+# Test parse_midi function
+try:
+    # Test with key = C
+    midi_file = midi_utils.load_midi(valid_file_path)
+    key = "C"
+    parsed_notes = midi_utils.parse_midi(midi_file, key)  # Call the function from midi_utils
+    print("parse_midi test started:")
+    if isinstance(parsed_notes, list):
+        print("  - Return type test passed: Returns a list.")
+        if parsed_notes:  # Check if the list is not empty
+            first_note = parsed_notes[0]
+            print(f"First note: {first_note}")
+            if isinstance(first_note, dict) and \
+               'note' in first_note and (
+                    isinstance(first_note['note'], int) or first_note['note'] == midi_utils.REST_SYMBOL) and \
+               'start_time' in first_note and isinstance(first_note['start_time'], (float, int)) and \
+               'end_time' in first_note and isinstance(first_note['end_time'], (float, int)) and \
+               'duration' in first_note and isinstance(first_note['duration'], (float, int)):
 
-                    notes.append({
-                        'note': REST_SYMBOL,  # Use -1 to indicate a rest
-                        'start_time': last_note_off_time,
-                        'end_time': current_time,
-                        'duration': quantized_duration
-                    })
-                if message.velocity > 0: #A note on event is only registered if velocity is greater than 0.
-                    note_on_messages[message.note] = current_time #set note on messages in the dictionary
-                else: #velocity == 0 is equivalent to note_off
-                    if message.note in note_on_messages: #If note is in dictionary then we can create a note
-                        start_time = note_on_messages[message.note] #get the start time from note_on_messages
-                        end_time = current_time #set the end time to current_time
-                        duration = end_time - start_time #calculate the duration by taking the difference
+                print("  - First note format test passed: The first element is of type Dictionary, with expected key value types")
+                print(f"  - First note: {first_note}")
+                print(f"Rest Symbol {midi_utils.REST_SYMBOL}")
 
-                        # Quantization logic starts here
-                        beat_length = 60 / tempo  # Length of one beat in seconds
-                        duration_beats = duration / beat_length  # Duration in beats
+                # Check that the duration is quantized
+                duration = first_note['duration']
+                is_quantized = (
+                        abs(duration * 4 - round(duration * 4)) < 1e-6 or  # Close to a 16th note
+                        abs(duration * 6 - round(duration * 6)) < 1e-6  # Close to a 16th note triplet
+                )
 
-                        # Quantize to 16th notes and 16th note triplets
-                        sixteenth_notes = duration_beats * 4
-                        sixteenth_triplets = duration_beats * 6
+                # Check if the note is a rest
+                is_rest = first_note['note'] == midi_utils.REST_SYMBOL
 
-                        # Calculate the distance to the nearest 16th note and 16th note triplet
-                        sixteenth_note_distance = abs(round(sixteenth_notes) - sixteenth_notes)
-                        sixteenth_triplet_distance = abs(round(sixteenth_triplets) - sixteenth_triplets)
+                if is_quantized or is_rest:
+                    print("  - Quantization test passed: Duration is quantized to 16th notes or triplets.")
+                else:
+                    print("  - Quantization test failed: Duration is not quantized.")
 
-                        if sixteenth_note_distance < sixteenth_triplet_distance:
-                            quantized_duration = round(sixteenth_notes) / 4  # Convert back to beats
-                        else:
-                            quantized_duration = round(sixteenth_triplets) / 6 # Convert back to beats
+                # Check if note is relative to C (or is a rest)
+                is_relative = (first_note['note'] >= -1 and first_note[
+                    'note'] <= 127 - 5 * NOTE_TO_NUMBER[key])  # REST_SYMBOL == -1, MAX MIDI Number == 127
 
-                        notes.append({ #Append a dictionary of note info to the notes list.
-                            'note': message.note,
-                            'start_time': start_time,
-                            'end_time': end_time,
-                            'duration': quantized_duration #store the calculated quantized duration
-                        })
-                        del note_on_messages[message.note] #remove the note from note_on_messages dictionary
-            elif message.type == 'note_off': #if a note is ending
-                if message.note in note_on_messages: #if note is in dictionary then we can create a note
-                    start_time = note_on_messages[message.note] #get the start time from note_on_messages
-                    end_time = current_time #set the end time to current_time
-                    duration = end_time - start_time #calculate the duration by taking the difference
-                    last_note_off_time = current_time #update the last note off time
-
-                    # Quantization logic starts here
-                    beat_length = 60 / tempo  # Length of one beat in seconds
-                    duration_beats = duration / beat_length  # Duration in beats
-
-                    # Quantize to 16th notes and 16th note triplets
-                    sixteenth_notes = duration_beats * 4
-                    sixteenth_triplets = duration_beats * 6
-
-                    # Calculate the distance to the nearest 16th note and 16th note triplet
-                    sixteenth_note_distance = abs(round(sixteenth_notes) - sixteenth_notes)
-                    sixteenth_triplet_distance = abs(round(sixteenth_triplets) - sixteenth_triplets)
-
-                    if sixteenth_note_distance < sixteenth_triplet_distance:
-                        quantized_duration = round(sixteenth_notes) / 4  # Convert back to beats
-                    else:
-                        quantized_duration = round(sixteenth_triplets) / 6 # Convert back to beats
-
-
-                    notes.append({ #Append a dictionary of note info to the notes list.
-                        'note': message.note,
-                        'start_time': start_time,
-                        'end_time': end_time,
-                        'duration': quantized_duration #store the calculated duration
-                    })
-                    del note_on_messages[message.note] #remove the note from note_on_messages dictionary
-
-    return notes
-
-def create_states(parsed_data):
-    """Creates a list of unique states from parsed MIDI data.
-
-    Args:
-        parsed_data (list): A list of dictionaries, where each dictionary represents a note
-                             and contains 'note', 'start_time', and 'end_time'.
-
-    Returns:
-        list: A list of unique states (e.g., just note values).
-    """
-
-    states = []
-    for note_data in parsed_data:
-        states.append( (note_data['note'], note_data['duration']) ) #create a tuple from the note and duration.
-    return states
-
-def create_midi_file(notes, filename="output.mid", tempo=120):
-    """
-    Creates a MIDI file from a list of notes.
-    """
-    midi_dir = "midi_creations"  # Name of the output directory
-
-    # Create the output directory if it doesn't exist
-    if not os.path.exists(midi_dir):
-        os.makedirs(midi_dir)
-
-    file_path = os.path.join(midi_dir, filename) #set the midi path
-
-    # Create midi file
-    midi_file = mido.MidiFile()
-    track = mido.MidiTrack()
-    midi_file.tracks.append(track)
-
-    # Set tempo
-    track.append(mido.Message('set_tempo', tempo=mido.bpm2tempo(tempo), time=0))
-
-    track.append(mido.Message('program_change', program=0, time=0)) #Program change to piano
-    current_time = 0 #start at zero, to get timing
-    ticks_per_beat = midi_file.ticks_per_beat
-
-    for note in notes:
-        midi_note = note['note']
-        duration = note['duration']
-
-        if midi_note == REST_SYMBOL: #it is a rest, so continue
-            continue
-
-        # Convert quantized duration to MIDI ticks
-        if duration % (1/3) == 0: # Check if its an triplet
-            ticks = int((duration / (1/3)) * (ticks_per_beat / 3))
+                if is_relative:
+                    print("  - Key test passed: Notes are relative to key")
+                else:
+                    print("  - Key test failed: Notes are not relative to key")
+            else:
+                print("  - First note format test failed: Incorrect note format.")
         else:
-            ticks = int(duration * ticks_per_beat)
-        track.append(mido.Message('note_on', note=midi_note, velocity=100, time = 0)) #add note with velocity
-        track.append(mido.Message('note_off', note=midi_note, velocity=100, time=ticks)) #remove note
+            print("  - No notes were parsed.")
+    else:
+        print("  - Return type test failed: Doesn't return a list.")
+    print("parse_midi test ended.")
+except Exception as e:
+    print(f"parse_midi test failed: An error occurred: {e}")
 
-    midi_file.save(file_path)
-    print(f"Midi file saved to {file_path}")
+# Test create_states function
+try:
+    states = midi_utils.create_states(parsed_notes)  # Call the function from midi_utils
+    print("create_states test started:")
+    if isinstance(states, list):
+        print("  - Return type test passed: Returns a list.")
+        if states:  # Check if the list is not empty
+            first_state = states[0]
+            print(f"First state: {first_state}")
+            if isinstance(first_state, tuple) and \
+               len(first_state) == 2 and \
+               (isinstance(first_state[0], int) or first_state[0] == midi_utils.REST_SYMBOL) and \
+               isinstance(first_state[1], (float, int)):
+                print("  - First element format test passed: Elements are tuples with (note, duration).")
+                print(f"  - First state: {first_state}")
+            else:
+                print("  - First element format test failed: Elements are not tuples with (note, duration).")
+        else:
+            print("  - No states were created.")
+    else:
+        print("  - Return type test failed: Doesn't return a list.")
+    print("create_states test ended.")
+except Exception as e:
+    print(f"create_states test failed: An error occurred: {e}")
+
+
+# Test the MarkovChain Class
+try:
+    print("\nTesting the MarkovChain Class:")
+    # Create an instance of the MarkovChain
+    markov_chain = markov.MarkovChain()
+
+    # Load the midi file and parse the notes
+    midi_file = midi_utils.load_midi(valid_file_path)
+    parsed_notes = midi_utils.parse_midi(midi_file, key)
+
+    # Create the states
+    states = midi_utils.create_states(parsed_notes)
+
+    # Create the state dictionary
+    markov_chain.create_state_dictionary(states)
+    print("- create_state_dictionary test passed: State dictionary created successfully.")
+
+    # Create the transition matrix
+    markov_chain.create_transition_matrix(states)
+    print("- create_transition_matrix test passed: Transition matrix created successfully.")
+
+    # Generate a sequence
+    length = 10  # Length of the sequence to generate
+    generated_sequence = markov_chain.generate_sequence(length)
+
+    # Verify that the generated sequence is a list
+    assert isinstance(generated_sequence, list), "generate_sequence test failed: The generated sequence is not a list."
+
+    # Verify that the generated sequence has the correct length
+    assert len(generated_sequence) == length, f"generate_sequence test failed: The generated sequence does not have the correct length (expected {length}, got {len(generated_sequence)})."
+
+    # Verify that the generated sequence contains valid states
+    valid_states = set(markov_chain.states.keys())
+    assert all(state in valid_states for state in generated_sequence), "generate_sequence test failed: The generated sequence contains invalid states."
+
+    print(f"- generate_sequence test passed: Generated a sequence of {length} valid states.")
+
+    # Test the generate_midi_file method
+    # markov_chain.generate_midi_file(generated_sequence, filename="test_generated_solo.mid")
+    # print("- generate_midi_file test passed: MIDI file generated successfully.")
+
+except Exception as e:
+    print(f"An error occurred while testing the MarkovChain class: {e}")
