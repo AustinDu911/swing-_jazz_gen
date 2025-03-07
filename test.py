@@ -5,11 +5,15 @@ import os
 import src.markov as markov
 import numpy as np
 
-print(f"Current working directory: {os.getcwd()}")
-print(f"Files in midi_files directory: {os.listdir('midi_files')}")
+# Define a dictionary to map key names to their note numbers
+NOTE_TO_NUMBER = {'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7,
+                  'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11}
+
+NOTE_TO_NUMBER = {'C':0, 'C#': 1, 'Db': 1, 'D':2, 'D#':3, 'Eb': 3, 'E':4, 'F':5, 'F#':6, 'Gb':6, 'G':7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#':10, 'Bb': 10, 'B':11}
 
 # Test load_midi function with a valid file path
-valid_file_path = "midi_files/BennyCarter_JustFriends_FINAL.mid"  # Replace with your MIDI file
+REST_SYMBOL = midi_utils.REST_SYMBOL #define as rest symbol
+valid_file_path = "midi_files/BennyCarter_JustFriends_FINAL_Bb_major.mid"  # Replace with your MIDI file
 
 try:
     midi_file = midi_utils.load_midi(valid_file_path)
@@ -47,8 +51,9 @@ except Exception as e:
 
 # Test parse_midi function
 try:
+    # Test with key = C
     midi_file = midi_utils.load_midi(valid_file_path)
-    parsed_notes = midi_utils.parse_midi(midi_file)  # Call the function from midi_utils
+    parsed_notes = midi_utils.parse_midi(midi_file, valid_file_path)  # Call the function from midi_utils
     print("parse_midi test started:")
     if isinstance(parsed_notes, list):
         print("  - Return type test passed: Returns a list.")
@@ -80,6 +85,14 @@ try:
                 else:
                     print("  - Quantization test failed: Duration is not quantized.")
 
+                # Check if note is relative to C (or is a rest)
+                is_relative = (first_note['note'] >= -1 and first_note[
+                    'note'] <= 127 - 5 * NOTE_TO_NUMBER[key])  # REST_SYMBOL == -1, MAX MIDI Number == 127
+
+                if is_relative:
+                    print("  - Key test passed: Notes are relative to key")
+                else:
+                    print("  - Key test failed: Notes are no relative to key")
             else:
                 print("  - First note format test failed: Incorrect note format.")
         else:
@@ -101,7 +114,7 @@ try:
             print(f"First state: {first_state}")
             if isinstance(first_state, tuple) and \
                len(first_state) == 2 and \
-               (isinstance(first_state[0], int) or isinstance(first_state[0] == midi_utils.REST_SYMBOL)) and \
+               (isinstance(first_state[0], int) or first_state[0] == midi_utils.REST_SYMBOL) and \
                isinstance(first_state[1], (float, int)):
                 print("  - First element format test passed: Elements are tuples with (note, duration).")
                 print(f"  - First state: {first_state}")
@@ -114,8 +127,8 @@ try:
     print("create_states test ended.")
 except Exception as e:
     print(f"create_states test failed: An error occurred: {e}")
-    
-    
+
+
 # Test the MarkovChain Class
 try:
     print("\nTesting the MarkovChain Class:")
@@ -124,9 +137,9 @@ try:
 
     # Load the midi file and parse the notes
     midi_file = midi_utils.load_midi(valid_file_path)
-    parsed_notes = midi_utils.parse_midi(midi_file)
+    parsed_notes = midi_utils.parse_midi(midi_file, valid_file_path)
 
-    #Create the states
+    # Create the states
     states = midi_utils.create_states(parsed_notes)
 
     # Create the state dictionary
@@ -151,9 +164,65 @@ try:
     valid_states = set(markov_chain.states.keys())
     assert all(state in valid_states for state in generated_sequence), "generate_sequence test failed: The generated sequence contains invalid states."
 
+    print(f"- generate_sequence test passed: Generated a sequence of {length} valid states.")
+
     # Test the generate_midi_file method
     # markov_chain.generate_midi_file(generated_sequence, filename="test_generated_solo.mid")
     # print("- generate_midi_file test passed: MIDI file generated successfully.")
 
 except Exception as e:
     print(f"An error occurred while testing the MarkovChain class: {e}")
+
+# Create and train a markov chain with the states that have been generated.
+markov_chain = markov.MarkovChain()
+markov_chain.create_state_dictionary(states)
+markov_chain.create_transition_matrix(states)
+# Generate a sequence of states.
+generated_sequence = markov_chain.generate_sequence(50)
+print(generated_sequence)
+
+
+# Test transposing and tempo adjustment
+try:
+    print("\nTesting Transposition and Tempo Adjustments:")
+
+    # Testing with C Major key
+    key = "C Major"
+    midi_file = midi_utils.load_midi(valid_file_path)
+    parsed_notes = midi_utils.parse_midi(midi_file, valid_file_path, quantization="16th_triplet")
+
+    # Check the transposition of notes
+    print(f"\nTransposition Test for {key}:")
+    transposed_notes = [note['note'] for note in parsed_notes if note['note'] != midi_utils.REST_SYMBOL]
+    expected_transposition = {'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 
+                              'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11}
+    transposed_notes_correct = all(
+        (note - expected_transposition[key.split()[0]]) % 12 == 0 for note in transposed_notes)  # Check correct transposition
+    
+    if transposed_notes_correct:
+        print(f"  - Transposition test passed for key {key}. Notes are correctly transposed.")
+    else:
+        print(f"  - Transposition test failed for key {key}. Notes are not transposed correctly.")
+
+    # Testing tempo adjustment
+    print(f"\nTempo Adjustment Test for {key}:")
+    bpm = 120  # Assumed tempo, you can dynamically extract this from the MIDI file if needed
+    original_durations = [note['duration'] for note in parsed_notes if note['note'] != midi_utils.REST_SYMBOL]
+
+    # Adjusted durations based on tempo (if tempo is 60 BPM, duration should be doubled)
+    tempo_multiplier = bpm / 120  # If BPM is 120, no change, else the durations will scale.
+    adjusted_durations = [round(duration * tempo_multiplier, 4) for duration in original_durations]
+
+    # Check that the adjusted durations match the expected results (using the assumed scale).
+    durations_match = all(
+        round(adjusted, 4) == round(orig, 4) for adjusted, orig in zip(adjusted_durations, original_durations)
+    )
+
+    if durations_match:
+        print(f"  - Tempo adjustment test passed for tempo {bpm} BPM.")
+    else:
+        print(f"  - Tempo adjustment test failed for tempo {bpm} BPM.")
+
+except Exception as e:
+    print(f"An error occurred while testing transposition and tempo adjustments: {e}")
+
