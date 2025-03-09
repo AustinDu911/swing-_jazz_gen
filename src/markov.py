@@ -2,6 +2,8 @@ import numpy as np
 import src.midi_utils as midi_utils
 
 class MarkovChain:
+    
+    
     def __init__(self):
         """
         Initializes the Markov Chain with an empty states dictionary and transition matrix.
@@ -40,7 +42,15 @@ class MarkovChain:
         current_state_id = self.states[current_state]
         next_state_id = self.states[next_state]
         self.transition_matrix[current_state_id, next_state_id] += 1 #increment the number of times a particular transition occurs
-        self.state_frequencies[current_state] +=1 #increment frequency
+        for state in states:
+          self.state_frequencies[state] = self.state_frequencies.get(state, 0) + 1  # Track frequency of each state
+
+        for i in range(len(states) - 1):
+          current_state = states[i]
+          next_state = states[i+1]
+          current_state_id = self.states[current_state]
+          next_state_id = self.states[next_state]
+          self.transition_matrix[current_state_id, next_state_id] += 1  # Count transitions
 
       #convert the transition matrix to probabilities
       for row in range(num_states):
@@ -81,7 +91,18 @@ class MarkovChain:
           total_frequency = sum(self.state_frequencies.values())
           normalized_frequencies = [self.state_frequencies[state] / total_frequency for state in states_list]
 
-          next_state_id = np.random.choice(len(states_list), p = normalized_frequencies)
+          # next_state_id = np.random.choice(len(states_list), p = normalized_frequencies)
+
+          if np.sum(probabilities) == 0:  # No transitions for this state
+          # Ensure no division by zero
+            if total_frequency == 0:
+              next_state_id = np.random.choice(len(states_list))  # Pick any valid state
+            else:
+              normalized_frequencies = [self.state_frequencies[state] / total_frequency for state in states_list]
+              next_state_id = np.random.choice(len(states_list), p=normalized_frequencies)
+
+
+
           next_state = states_list[next_state_id]
         else:
           next_state_id = np.random.choice(len(states_list), p = probabilities)
@@ -91,6 +112,8 @@ class MarkovChain:
 
       return generated_sequence
 
+
+
     def generate_midi_file(self, generated_sequence, filename="generated_solo.mid", tempo=120):
         """Generates a MIDI file from a sequence of states.
 
@@ -99,4 +122,9 @@ class MarkovChain:
             filename (str): The name of the output MIDI file.
             tempo (int): The tempo of the generated MIDI file (in BPM).
         """
-        midi_utils.create_midi_file(generated_sequence, filename, tempo)
+        valid_notes = [(note, duration) for note, duration in generated_sequence if 0 <= note <= 127 or note == midi_utils.REST_SYMBOL]
+
+        midi_utils.create_midi_file(valid_notes, filename, tempo)
+
+
+

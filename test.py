@@ -13,7 +13,7 @@ NOTE_TO_NUMBER = {'C':0, 'C#': 1, 'Db': 1, 'D':2, 'D#':3, 'Eb': 3, 'E':4, 'F':5,
 
 # Test load_midi function with a valid file path
 REST_SYMBOL = midi_utils.REST_SYMBOL #define as rest symbol
-valid_file_path = "midi_files/BennyCarter_JustFriends_FINAL_Bb_major.mid"  # Replace with your MIDI file
+valid_file_path = "midi_files/JustFriends_Bb_major.mid"  # Replace with your MIDI file
 
 try:
     midi_file = midi_utils.load_midi(valid_file_path)
@@ -86,8 +86,12 @@ try:
                     print("  - Quantization test failed: Duration is not quantized.")
 
                 # Check if note is relative to C (or is a rest)
-                is_relative = (first_note['note'] >= -1 and first_note[
-                    'note'] <= 127 - 5 * NOTE_TO_NUMBER[key])  # REST_SYMBOL == -1, MAX MIDI Number == 127
+                key_from_filename = midi_utils.extract_key_from_filename(valid_file_path)
+
+                if key_from_filename:
+                    is_relative = (first_note['note'] >= -1 and first_note['note'] <= 127 - 5 * NOTE_TO_NUMBER[key_from_filename.split()[0]])
+                else:
+                    is_relative = False  # If no key found, assume failure
 
                 if is_relative:
                     print("  - Key test passed: Notes are relative to key")

@@ -15,3 +15,9 @@ markov_chain.create_transition_matrix(states)
 # Generate a sequence of states.
 generated_sequence = markov_chain.generate_sequence(50)
 print(generated_sequence)
+
+
+additional work:
+
+ends state for markov chain?
+
